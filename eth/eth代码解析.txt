@@ -1,0 +1,33 @@
+
+
+core---state_processor---Process   处理区块
+
+	core---state_processor---applyTransaction  处理交易
+
+		core---state_processor---applyMessage  处理交易信息
+		
+			core---state_transition---TransitionDb  处理交易信息
+			
+			core---vm---evm---Create
+			or 
+			core---vm---evm---Call
+			
+			core---state---statedb---AddBalance 
+
+
+consensus---consensus---Finalize   打包区块
+
+
+
+
+internal---ethapi---api---Call
+
+---DoCall
+
+---ToMessage
+
+---NewMessage
+
+---ApplyMessage
+
+---NewStateTransition

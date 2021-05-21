@@ -1,0 +1,82 @@
+
+初始化： geth --datadir data init genesis.json
+
+启动命令：geth --datadir data --networkid 1 --rpc --rpccorsdomain "*" --rpcapi "personal,db,eth,net,web3,miner" --rpcaddr "0.0.0.0" --nodiscover console
+          在哪个目录下启动就在哪个目录下创建data
+
+退出： exit
+
+重新进入客户端：geth attach     geth attach "/Users/admin/bin/ethdata/geth.ipc"
+
+创建账号：personal.newAccount("123")
+
+查看账号：eth.accounts
+
+查看账号以太币: eth.getBalance("0xbcf5b841303bc08026ce2d3b8f83498ffe42c12f")
+
+解锁账户：personal.unlockAccount(eth.accounts[0],'123456',0)  三个参数为：pubkey，password，时间（0表示永久解锁）
+
+转账：eth.sendTransaction({from: acc0, to: acc1, value: amount})
+
+查看区块个数： eth.blockNumber
+
+查看交易 ：eth.getTransaction(“transactionAddr”) 
+
+通过区块号查看区块：eth.getBlock(blockNumber)
+
+切换矿工账号： miner.setEtherbase(eth.accounts[1]) 
+
+开始挖矿： miner.start() 
+停止挖矿： miner.stop() 
+
+
+以太币单位换算：
+kwei (1000 Wei)
+mwei (1000 KWei)
+gwei (1000 mwei)
+szabo (1000 gwei)
+finney (1000 szabo)
+ether (1000 finney)
+
+
+
+{
+   "config": {
+        "chainId": 1,
+        "homesteadBlock": 0,
+        "eip155Block": 0,
+        "eip158Block": 0
+    },
+    "coinbase" : "0x0000000000000000000000000000000000000000",
+    "difficulty" : "0x10000",
+    "extraData" : "0x123456",
+    "gasLimit" : "0xffffffff",
+    "nonce" : "0x0000000000000000",
+    "mixhash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp" : "0x00",
+    "alloc": { }
+}
+
+
+goland注册地址： http://idea.youbbs.org
+
+
+项目地址
+git clone https://github.com/ethereum/go-ethereum
+
+
+sudo apt-get install -y build-essential golang
+
+构建项目
+cd go-ethereum
+make geth
+
+用于0.2xx的Web3 JavaScript app API（eth命令）：
+https://github.com/ethereum/wiki/wiki/JavaScript-API#web3ethgettransactionreceipt
+
+异常：
+Command "python setup.py egg_info" failed with error code 1 in /tmp/pip-build-6yN82G/ethereum/
+解决：
+证明setuptools版本太高，降版本到3.7即可     pip install setuptools==37
+

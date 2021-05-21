@@ -1,0 +1,68 @@
+seafile 快速搭建
+
+安装docker compose
+# for CentOS
+yum install docker-compose -y
+
+# for Ubuntu
+apt-get install docker-compose -y
+
+使用docker compose搭建seafile
+docker-compose.yml
+
+version: '2.0'
+services:
+  db:
+    image: mariadb:10.5
+    container_name: seafile-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=db_dev  # Requested, set the root's password of MySQL service.
+      - MYSQL_LOG_CONSOLE=true
+    volumes:
+      - /opt/seafile-mysql/db:/var/lib/mysql  # Requested, specifies the path to MySQL data persistent store.
+    networks:
+      - seafile-net
+
+  memcached:
+    image: memcached:1.5.6
+    container_name: seafile-memcached
+    entrypoint: memcached -m 256
+    networks:
+      - seafile-net
+          
+  seafile:
+    image: seafileltd/seafile-mc:latest
+    container_name: seafile
+    ports:
+      - "80:80"
+#      - "443:443"  # If https is enabled, cancel the comment.
+    volumes:
+      - /opt/seafile-data:/shared   # Requested, specifies the path to Seafile data persistent store.
+    environment:
+      - DB_HOST=db
+      - DB_ROOT_PASSWD=db_dev  # Requested, the value shuold be root's password of MySQL service.
+#      - TIME_ZONE=Asia/Shanghai # Optional, default is UTC. Should be uncomment and set to your local time zone.
+      - SEAFILE_ADMIN_EMAIL=me@example.com # Specifies Seafile admin user, default is 'me@example.com'.
+      - SEAFILE_ADMIN_PASSWORD=asecret     # Specifies Seafile admin password, default is 'asecret'.
+      - SEAFILE_SERVER_LETSENCRYPT=false   # Whether use letsencrypt to generate cert.
+      - SEAFILE_SERVER_HOSTNAME=seafile.example.com # Specifies your host name.
+    depends_on:
+      - db
+      - memcached
+    networks:
+      - seafile-net
+
+networks:
+  seafile-net:
+  
+需要开放服务器的80 8000 8082端口
+  
+修改ccnet.conf文件：
+	SERVICE_URL = http://ip:8000
+
+修改seahub_settings.py文件：
+	FILE_SERVER_ROOT = "http://ip/seafhttp"
+	
+登陆web端，在用户---系统管理---设置里
+更改SERVICE_URL = http://ip:8000
+    FILE_SERVER_ROOT = "http://ip/seafhttp"

@@ -1,0 +1,18 @@
+经过一下操作，可以修复我们手动误删的 /var/lib/dpkg
+
+1. 新建dpkg文件夹：
+
+sudo mkdir -p /var/lib/dpkg/{alternatives,info,parts,triggers,updates}
+2.恢复一些备份：
+sudo cp /var/backups/dpkg.status.0 /var/lib/dpkg/status
+3.查看dpkg是否正常：
+apt-get download dpkg
+sudo dpkg -i dpkg*.deb
+4.如果上一步正常，接着修复一些基本文件：
+apt-get download base-files
+sudo dpkg -i base-files*.deb
+5.最后尝试更新软件包列表：
+sudo apt-get update
+sudo apt-get check
+
+经过这些操作基本上dpkg就恢复过来啦~

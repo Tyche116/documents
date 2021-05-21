@@ -1,0 +1,267 @@
+1、环境搭建说明：
+本脚本中的步骤，模拟在两个服务器上部署三个组织，7个peer。
+首先搭建2个组织的fabric网络，每个组织2个peer，后面在org1中动态加入1个peer，再在网络中动态加入一个组织，该组织有2个peer。
+
+2、环境搭建步骤：
+linux环境中：
+chmod 777 /etc/hosts
+
+编辑/etc/hosts，加入
+192.168.66.137  peer0.org1.example.com
+192.168.66.139  peer1.org1.example.com
+192.168.66.139  peer0.org2.example.com
+192.168.66.137  peer1.org2.example.com
+192.168.66.137  peer0.org3.example.com
+192.168.66.139  peer1.org3.example.com
+192.168.66.137  peer2.org1.example.com
+192.168.66.137  orderer.example.com
+
+环境初始化：
+将提供的fabric-samples/first-network文件夹拷贝入两个服务器的cd $GOPATH/src/github.com/hyperledger/fabric-samples/
+目录。
+将链码文件夹financialApp/chaincode/turing拷贝到fabric-sample/chaincode目录。
+在first-network路径下执行：
+./byfn.sh down之后去/var/lib/docker/volumes目录查看，如果有net_开头的文件夹，需要手动删除。
+在first-network目录操作，将两个节点中的crypto-config，channel-artifacts，org3-artifacts/crypto-config/
+文件夹删除。
+
+#1号节点：peer0.org1.example.com
+#2号节点：peer1.org1.example.com
+
+开始操作：
+在#1号节点上操作
+生成证书，一定要同步拷贝到另一个节点
+../bin/cryptogen generate --config=./crypto-config.yaml
+scp -r crypto-config root@peer1.org1.example.com://opt/gopath/src/github.com/hyperledger/fabric-samples/first-network
+
+生成创世块，创建通道，锚节点更新交易
+mkdir channel-artifacts
+../bin/configtxgen -profile TwoOrgsOrdererGenesis -outputBlock ./channel-artifacts/genesis.block
+../bin/configtxgen -profile TwoOrgsChannel -outputCreateChannelTx ./channel-artifacts/channel.tx -channelID mychannel
+../bin/configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/Org1MSPanchors.tx -channelID mychannel -asOrg Org1MSP
+../bin/configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/Org2MSPanchors.tx -channelID mychannel -asOrg Org2MSP
+
+创建的交易为protobuf格式，如果想查看，需要转换成json，--type参数如何获取，可以参考fabric源码，看看configtxgen生成的是什么结构的。
+../bin/configtxlator proto_decode --input channel-artifacts/genesis.block --type common.Block > channel-artifacts/genesis.json
+../bin/configtxlator proto_decode --input channel-artifacts/channel.tx --type common.Envelope > channel-artifacts/channel.json
+../bin/configtxlator proto_decode --input channel-artifacts/Org1MSPanchors.tx --type common.Envelope > channel-artifacts/Org1MSPanchors.json
+../bin/configtxlator proto_decode --input channel-artifacts/Org2MSPanchors.tx --type common.Envelope > channel-artifacts/Org2MSPanchors.json
+
+
+启动各节点服务
+在#1号机器上启动（peer编号+org编号=奇数）
+docker-compose -f docker-compose-peer0-org1.yaml up -d
+docker-compose -f docker-compose-peer1-org2.yaml up -d
+docker-compose -f docker-compose-order.yaml up -d
+docker-compose -f docker-compose-cli-alone.yaml up -d
+在#2号机器上启动（peer编号+org编号=偶数）
+docker-compose -f docker-compose-peer1-org1.yaml up -d
+docker-compose -f docker-compose-peer0-org2.yaml up -d
+
+通过cli的docker，在各个peer上执行命令。连接不同的peer时至需要设置相应的环境变量，制定证书路径和peer信息
+在#1号节点操作：
+docker exec -it cli bash
+创建通道，会在当前目录生成通道创世块mychannel.block，同样可以通过configtxlator proto_decode解码查看内容。mychannel.block为第0个区块，可以通过peer channel fetch
+peer channel create -o orderer.example.com:7050 -c mychannel -f ./channel-artifacts/channel.tx
+各节点接入通道
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+export CORE_PEER_LOCALMSPID="Org1MSP"
+peer channel join -b mychannel.block
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer1.org1.example.com:8051
+export CORE_PEER_LOCALMSPID="Org1MSP"
+peer channel join -b mychannel.block
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org2.example.com:9051
+export CORE_PEER_LOCALMSPID="Org2MSP"
+peer channel join -b mychannel.block
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_ADDRESS=peer1.org2.example.com:10051
+export CORE_PEER_LOCALMSPID="Org2MSP"
+peer channel join -b mychannel.block
+
+更新锚节点信息
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+export CORE_PEER_LOCALMSPID="Org1MSP"
+peer channel update -o orderer.example.com:7050 -c mychannel -f ./channel-artifacts/Org1MSPanchors.tx
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org2.example.com:9051
+export CORE_PEER_LOCALMSPID="Org2MSP"
+peer channel update -o orderer.example.com:7050 -c mychannel -f ./channel-artifacts/Org2MSPanchors.tx
+
+可以通过如下命令查看通道信息
+peer channel -c mychannel getinfo
+peer channel list
+
+安装链码
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+export CORE_PEER_LOCALMSPID="Org1MSP"
+peer chaincode install -n turingcc -v 1.0 -p github.com/chaincode/turing
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org2.example.com:9051
+export CORE_PEER_LOCALMSPID="Org2MSP"
+peer chaincode install -n turingcc -v 1.0 -p github.com/chaincode/turing
+
+初始化链码
+peer chaincode instantiate -o orderer.example.com:7050 -C mychannel -n turingcc -v 1.0 -c '{"Args":["init","a","10000","b","20000"]}' -P "AND ('Org1MSP.member','Org2MSP.member')"
+
+测试链码，invoke后查询余额，看是否有变化
+peer chaincode query -C mychannel -n turingcc -c '{"Args":["query","a"]}'
+peer chaincode invoke -C mychannel -n turingcc -o orderer.example.com:7050 --peerAddresses peer0.org1.example.com:7051 --peerAddresses peer0.org2.example.com:9051 -c '{"Args":["invoke","a","b","20"]}'
+
+升级链码，每次升级，版本号递增即可。
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+export CORE_PEER_LOCALMSPID="Org1MSP"
+peer chaincode install -n turingcc -v 1.1 -p github.com/chaincode/turing
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org2.example.com:9051
+export CORE_PEER_LOCALMSPID="Org2MSP"
+peer chaincode install -n turingcc -v 1.1 -p github.com/chaincode/turing
+
+peer chaincode upgrade -o orderer.example.com:7050 -C mychannel -n turingcc -v 1.1 -c '{"Args":["init","a","20000","b","10000"]}' -P "AND ('Org1MSP.member','Org2MSP.member')"
+
+组织中增加peer
+crypto-config.yaml中将org1的count修改为3
+../bin/cryptogen extend --config=./crypto-config.yaml
+docker-compose -f docker-compose-peer2-org1.yaml up -d （如果执行失败，需要手动创建目录/var/lib/docker/volumes/net_peer2.org1.example.com/_data）
+docker exec -it cli bash
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer2.org1.example.com:13051
+export CORE_PEER_LOCALMSPID="Org1MSP"
+peer channel join -b mychannel.block
+
+添加组织：
+在#1号节点
+cd org3-artifacts/
+../../bin/cryptogen generate --config=./org3-crypto.yaml
+../../bin/configtxgen -printOrg Org3MSP -profile ./configtx.yaml > ../channel-artifacts/org3.json
+cp -r crypto-config/peerOrganizations/org3.example.com/ ../crypto-config/peerOrganizations/
+cd ..
+scp -r crypto-config/peerOrganizations/org3.example.com/ root@peer1.org1.example.com://opt/gopath/src/github.com/hyperledger/fabric-samples/first-network/crypto-config/peerOrganizations/
+scp -r org3-artifacts/crypto-config root@peer1.org1.example.com://opt/gopath/src/github.com/hyperledger/fabric-samples/first-network/org3-artifacts
+
+docker exec -it cli bash
+peer channel fetch config config_block.pb -o orderer.example.com:7050 -c mychannel
+configtxlator proto_decode --input config_block.pb --type common.Block | jq .data.data[0].payload.data.config > config.json
+jq -s '.[0] * {"channel_group":{"groups":{"Application":{"groups": {"Org3MSP":.[1]}}}}}' config.json ./channel-artifacts/org3.json > modified_config.json
+configtxlator proto_encode --input config.json --type common.Config > original_config.pb
+configtxlator proto_encode --input modified_config.json --type common.Config > modified_config.pb
+configtxlator compute_update --channel_id mychannel --original original_config.pb --updated modified_config.pb > config_update.pb
+configtxlator proto_decode --input config_update.pb  --type common.ConfigUpdate > config_update.json
+echo '{"payload":{"header":{"channel_header":{"channel_id":"mychannel", "type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json
+configtxlator proto_encode --input config_update_in_envelope.json --type common.Envelope > org3_update_in_envelope.pb
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+export CORE_PEER_LOCALMSPID="Org1MSP"
+peer channel signconfigtx -f org3_update_in_envelope.pb
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org2.example.com:9051
+export CORE_PEER_LOCALMSPID="Org2MSP"
+peer channel signconfigtx -f org3_update_in_envelope.pb
+
+peer channel update -f org3_update_in_envelope.pb -c mychannel -o orderer.example.com:7050
+
+#1号机器
+docker-compose -f docker-compose-peer0-org3.yaml up -d
+#2号机器
+docker-compose -f docker-compose-peer1-org3.yaml up -d
+
+#1号机器
+docker exec -it cli bash
+peer channel fetch 0 mychannel.block -o orderer.example.com:7050 -c mychannel
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org3.example.com/users/Admin@org3.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org3.example.com:11051
+export CORE_PEER_LOCALMSPID="Org3MSP"
+peer channel join -b mychannel.block
+
+CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org3.example.com/users/Admin@org3.example.com/msp
+export CORE_PEER_ADDRESS=peer1.org3.example.com:12051
+export CORE_PEER_LOCALMSPID="Org3MSP"
+peer channel join -b mychannel.block
+
+升级链码，每次升级，版本号递增即可。
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+export CORE_PEER_LOCALMSPID="Org1MSP"
+peer chaincode install -n turingcc -v 1.2 -p github.com/chaincode/turing
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org2.example.com/users/Admin@org2.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org2.example.com:9051
+export CORE_PEER_LOCALMSPID="Org2MSP"
+peer chaincode install -n turingcc -v 1.2 -p github.com/chaincode/turing
+
+peer chaincode upgrade -o orderer.example.com:7050 -C mychannel -n turingcc -v 1.2 -c '{"Args":["init","a","20000","b","10000"]}' -P "AND ('Org1MSP.member','Org2MSP.member','Org3MSP.peer')"
+
+在第三个peer上安装链码
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org3.example.com/users/Admin@org3.example.com/msp
+export CORE_PEER_ADDRESS=peer0.org3.example.com:11051
+export CORE_PEER_LOCALMSPID="Org3MSP"
+peer chaincode install -n turingcc -v 1.2 -p github.com/chaincode/turing
+
+peer chaincode query -C mychannel -n turingcc -c '{"Args":["query","a"]}'
+peer chaincode invoke -C mychannel -n turingcc -o orderer.example.com:7050 --peerAddresses peer0.org1.example.com:7051 --peerAddresses peer0.org2.example.com:9051 --peerAddresses peer0.org3.example.com:11051 -c '{"Args":["invoke","a","b","20"]}'
+
+
+
+环境搭建完毕后，如果需要停止服务，该命令不删除区块链数据（/var/lib/docker/volumes/下的文件夹）：
+在#1号机器上启动（peer编号+org编号=奇数）
+docker-compose -f docker-compose-peer0-org1.yaml down
+docker-compose -f docker-compose-peer2-org1.yaml down
+docker-compose -f docker-compose-peer1-org2.yaml down
+docker-compose -f docker-compose-peer0-org3.yaml down
+docker-compose -f docker-compose-order.yaml down
+docker-compose -f docker-compose-cli-alone.yaml down
+在#2号机器上启动（peer编号+org编号=偶数）
+docker-compose -f docker-compose-peer1-org1.yaml down
+docker-compose -f docker-compose-peer0-org2.yaml down
+docker-compose -f docker-compose-peer1-org3.yaml down
+
+要继续服务：
+在#1号机器上启动（peer编号+org编号=奇数）
+docker-compose -f docker-compose-peer0-org1.yaml up -d
+docker-compose -f docker-compose-peer2-org1.yaml up -d
+docker-compose -f docker-compose-peer1-org2.yaml up -d
+docker-compose -f docker-compose-peer0-org3.yaml up -d
+docker-compose -f docker-compose-order.yaml up -d
+docker-compose -f docker-compose-cli-alone.yaml up -d
+在#2号机器上启动（peer编号+org编号=偶数）
+docker-compose -f docker-compose-peer1-org1.yaml up -d
+docker-compose -f docker-compose-peer0-org2.yaml up -d
+docker-compose -f docker-compose-peer1-org3.yaml up -d
+
+在#1号机器上使用cli docker执行命令：
+docker exec -it cli bash
+
+附其他命令：
+查看docker日志：docker logs --details peer2.org1.example.com
+实时查看docker日志：docker logs -ft peer0.org1.example.com
+
+
+
+##################################################################################################
+
+进入容器
+docker exec -it cli bash
+链码安装
+peer chaincode install -n x1 -v 1.0 -l golang -p github.com/chaincode/pledgeinfo
+链码初始化
+peer chaincode instantiate -o orderer.example.com:7050 -C mychannel -n x1 -l golang -v 1.0 -c '{"Args":[]}' -P 'AND ('\''Org1MSP.peer'\'','\''Org2MSP.peer'\'')'
+链码执行
+peer chaincode invoke -o orderer.example.com:7050 -C mychannel -n kpcc7 -c '{"Args":["invoke","Alice","98","92"]}'
+链码查询
+peer chaincode query -C mychannel -n kpcc7 -c '{"Args":["query","Alice"]}'
+链码更新
+peer chaincode install -n kpcc7 -v 1.1 -l golang -p github.com/chaincode/fabric-chaincode/kunpeng_example01

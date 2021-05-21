@@ -1,0 +1,4 @@
+ javac  Test123.java
+
+
+ java Test123

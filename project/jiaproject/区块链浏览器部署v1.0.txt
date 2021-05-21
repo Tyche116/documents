@@ -1,0 +1,41 @@
+
+
+1.准备文件
+前端文件夹
+html/
+后端文件夹
+explorer/
+
+2.将前后端文件夹拷贝到系统目录下：PROJDIR/flask/
+其中PROJDIR为项目目录，默认为/home/chain/turingchain
+
+3.修改后端文件的节点配置
+vim /home/chain/turingchain/flask/explorer/turing_explorer/app/driver_service.py
+其中bdb_root_url_1 改成区块链节点的ip：port, 与bank_supervision的config.json中的bdb_root_url一致
+
+4.加载docker镜像(已有py_flask镜像可忽略，部署bank_supervision时也用到了py_flask)
+docker load < py_flask.tar
+
+5.创建运行容器
+docker run -it -p 8100:8100 -p 9002:8004 -v $PROJDIR/flask/explorer/turing_explorer:/opt/turing_explorer -v $PROJDIR/flask:/var/www/ --name explorer py_flask /bin/bash
+
+6.启动浏览器前后端服务
+进入容器后
+cd /opt/turing_explorer
+
+启动前端服务
+service apache2 start  或  service apache2 restart
+
+启动后端接口服务
+python3 turing_explorer.py
+
+7.浏览器测试
+
+本地测试前端连通性
+wget http://139.196.220.111:8100/ 看是否下载了网页文件html
+本地测试后端连通性
+curl http://121.37.178.144:9002/v1/get_statistics 【查看最近15天的上链交易量】
+
+最终浏览器测试
+浏览器访问http://139.196.220.111:8100/#/home/home?curentPage=1，其中139.196.220.111改为部署机器的ip
+
