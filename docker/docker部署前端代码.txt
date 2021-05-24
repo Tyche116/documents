@@ -1,0 +1,7 @@
+    1  docker ps
+    2  docker pull nginx
+    9  docker run -d --name web -p 80:80 -v /home/test/html/audit-bid-project:/usr/share/nginx/html -v /home/test/html/config/nginx.conf:/etc/nginx/conf.d/default.conf nginx
+   10  docker ps -a
+   11  docker stop web
+   12  docker start web
+   13  docker exec -it tender1 bash

@@ -1,0 +1,5 @@
+导出：
+mongoexport -d bidaudit -c bidproject -o D:/bidproject.json --type json
+
+导入:
+ mongoimport -d bidaudit -c bidproject  --type=json --file=bidproject.json

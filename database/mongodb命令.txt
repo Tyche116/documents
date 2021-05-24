@@ -1,0 +1,22 @@
+
+登陆用户名big密码homex303 bigchain的数据库
+mongo --host localhost -u "big" --authenticationDatabase "bigchain" -p'homex303'
+
+查看当前数据库
+db
+
+查看所有数据库
+show dbs
+
+查看所有表
+show collections
+
+查看数据库状态
+db.stats()
+
+查看某一集合所有记录
+db.collection_name.find()
+
+条件查找某一集合的记录
+db.collection_name.find({"_id":1})
+

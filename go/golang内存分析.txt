@@ -1,0 +1,25 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+使用命令行工具查看
+go tool pprof -inuse_space http://127.0.0.1:8080/debug/pprof/heap
+
+top10 查看使用对象较多的10个函数入口
+
+
+go tool pprof -alloc_space http://127.0.0.1:8080/debug/pprof/heap
+top查看累计分配内存较多的函数调用
+
+top -cum
+web
